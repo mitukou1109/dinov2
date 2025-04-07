@@ -11,9 +11,7 @@ import logging
 import os
 import warnings
 
-from torch import Tensor
-from torch import nn
-
+from torch import Tensor, nn
 
 logger = logging.getLogger("dinov2")
 
@@ -53,7 +51,7 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim, bias=proj_bias)
         self.proj_drop = nn.Dropout(proj_drop)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: Tensor, return_attention=False) -> Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
 
@@ -62,6 +60,8 @@ class Attention(nn.Module):
 
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
+        if return_attention:
+            return attn
 
         x = (attn @ v).transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
@@ -70,11 +70,11 @@ class Attention(nn.Module):
 
 
 class MemEffAttention(Attention):
-    def forward(self, x: Tensor, attn_bias=None) -> Tensor:
+    def forward(self, x: Tensor, attn_bias=None, return_attention=False) -> Tensor:
         if not XFORMERS_AVAILABLE:
             if attn_bias is not None:
                 raise AssertionError("xFormers is required for using nested tensors")
-            return super().forward(x)
+            return super().forward(x, return_attention)
 
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
@@ -82,6 +82,10 @@ class MemEffAttention(Attention):
         q, k, v = unbind(qkv, 2)
 
         x = memory_efficient_attention(q, k, v, attn_bias=attn_bias)
+        
+        if return_attention:
+            return x.permute(0, 2, 1, 3) @ v.permute(0, 2, 3, 1)
+
         x = x.reshape([B, N, C])
 
         x = self.proj(x)

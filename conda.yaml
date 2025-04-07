@@ -9,12 +9,14 @@ dependencies:
   - python=3.10
   - pytorch::pytorch<2
   - pytorch::pytorch-cuda=12.4.0
+  - pytorch::torchtriton
   - pytorch::torchvision
   - omegaconf
   - torchmetrics
   - fvcore
   - iopath
   - xformers::xformers=0.0.18
+  - numpy<2
   - pip
   - pip:
     - git+https://github.com/facebookincubator/submitit
